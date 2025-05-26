@@ -29,10 +29,6 @@ func main() {
 	updates := bot.GetUpdatesChan(u)
 
 	for update := range updates {
-		if update.Message != nil && update.Message.Video != nil {
-			log.Printf("Video FileID: %s", update.Message.Video.FileID)
-		}
-
 		if update.Message != nil && update.Message.IsCommand() {
 			switch update.Message.Command() {
 			case "start":
@@ -48,7 +44,7 @@ func main() {
 
 			switch data {
 			case "free_lesson":
-				video := tgbotapi.NewVideo(chatID, tgbotapi.FileID("ВСТАВЬ_СЮДА_file_id"))
+				video := tgbotapi.NewVideo(chatID, tgbotapi.FileID("AAMCAgADGQEAAwVoNA9ktqKzrGJh14tAEgH0D4lHrQACo3EAApffkUmuOZmgd-TMRgEAB20AAzYE"))
 				video.Caption = "Вот бесплатный видеоурок!\n\nХочешь узнать, какие нейросети я использую в Reels?"
 				video.ReplyMarkup = secondInlineKeyboard()
 				bot.Send(video)
