@@ -214,8 +214,8 @@ func finalInlineKeyboard() tgbotapi.InlineKeyboardMarkup {
 }
 
 func tariffKeyboard() tgbotapi.InlineKeyboardMarkup {
-	buttonSupport := tgbotapi.NewInlineKeyboardButtonData("С поддержкой от автора", "tariff_support")
-	buttonClassic := tgbotapi.NewInlineKeyboardButtonData("Классический тариф", "tariff_classic")
+	buttonSupport := tgbotapi.NewInlineKeyboardButtonData("✅С поддержкой от автора", "tariff_support")
+	buttonClassic := tgbotapi.NewInlineKeyboardButtonData("💼Классический тариф", "tariff_classic")
 	return tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(buttonSupport),
 		tgbotapi.NewInlineKeyboardRow(buttonClassic),
