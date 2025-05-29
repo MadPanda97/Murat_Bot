@@ -2,161 +2,219 @@ package main
 
 import (
 	"log"
-	"os"
+	"strings"
+	"sync"
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"github.com/joho/godotenv"
+	"os"
 )
 
-type UserState struct {
-	Stage      int
-	LastAction time.Time
-}
-
-var userStates = make(map[int64]*UserState)
+var (
+	waitingUsers   = make(map[int64]struct{})
+	waitingUsersMu sync.Mutex
+)
 
 func main() {
-	err := godotenv.Load()
-	if err != nil {
-		log.Println("No .env file found")
+	botToken := os.Getenv("TELEGRAM_TOKEN")
+	if botToken == "" {
+		log.Fatal("TELEGRAM_TOKEN не установлен")
 	}
 
-	bot, err := tgbotapi.NewBotAPI(os.Getenv("TELEGRAM_TOKEN"))
+	bot, err := tgbotapi.NewBotAPI(botToken)
 	if err != nil {
 		log.Panic(err)
 	}
 
+	bot.Debug = true
+	log.Printf("Бот %s запущен", bot.Self.UserName)
+
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
-
 	updates := bot.GetUpdatesChan(u)
 
-	go reminderScheduler(bot)
+	go reminderLoop(bot)
 
 	for update := range updates {
-		if update.Message == nil && update.CallbackQuery == nil {
-			continue
-		}
+		if update.Message != nil {
+			text := strings.ToLower(update.Message.Text)
+			chatID := update.Message.Chat.ID
 
-		chatID := update.FromChat().ID
-		state, exists := userStates[chatID]
-		if !exists {
-			state = &UserState{Stage: 0, LastAction: time.Now()}
-			userStates[chatID] = state
-		}
+			switch {
+			case strings.Contains(text, "хочу урок"):
+				msg := tgbotapi.NewMessage(chatID, "Привет! Вот бесплатный видеоурок 👇")
+				msg.ReplyMarkup = firstInlineKeyboard()
+				if _, err := bot.Send(msg); err != nil {
+					log.Println("Ошибка отправки по ключевому слову:", err)
+				}
 
-		if update.Message != nil && update.Message.Text == "Хочу урок" {
-			state.Stage = 1
-			state.LastAction = time.Now()
-			sendStage1(bot, chatID)
-			continue
+			case text == "хочу на курс":
+				waitingUsersMu.Lock()
+				waitingUsers[chatID] = struct{}{}
+				waitingUsersMu.Unlock()
+
+				msg := tgbotapi.NewMessage(chatID, "Отлично! Ты записан на обучение. Мы напомним тебе через 1 и 2 дня.")
+				if _, err := bot.Send(msg); err != nil {
+					log.Println("Ошибка отправки подтверждения записи на курс:", err)
+				}
+
+			default:
+				if update.Message.Video != nil {
+					log.Printf("Video FileID: %s", update.Message.Video.FileID)
+				}
+			}
 		}
 
 		if update.CallbackQuery != nil {
-			data := update.CallbackQuery.Data
-			switch data {
-			case "checklist":
-				state.Stage = 2
-				state.LastAction = time.Now()
-				sendStage2(bot, chatID)
-			case "reels":
-				state.Stage = 3
-				state.LastAction = time.Now()
-				sendStage3(bot, chatID)
-			case "course":
-				state.Stage = 4
-				state.LastAction = time.Now()
-				sendStage4(bot, chatID)
+			callback := tgbotapi.NewCallback(update.CallbackQuery.ID, "")
+			if _, err := bot.Request(callback); err != nil {
+				log.Println("Ошибка подтверждения callback:", err)
 			}
-		}
-	}
-}
 
-func sendStage1(bot *tgbotapi.BotAPI, chatID int64) {
-	video := tgbotapi.NewVideo(chatID, tgbotapi.FileID("BAACAgIAAxkBAAMPaDQXibPXuGm8U9wG_KjFDwrJ8JkAAlVqAAJOBKFJ0BS7KrQcUS82BA"))
-	video.Caption = "Вот бесплатный видеоурок 🎓"
-	bot.Send(video)
+			data := update.CallbackQuery.Data
+			chatID := update.CallbackQuery.Message.Chat.ID
 
-	msg := tgbotapi.NewMessage(chatID, "Хочешь чек-лист по нейросетям для Reels?")
-	btn := tgbotapi.NewInlineKeyboardMarkup(
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("Да, хочу", "checklist"),
-		),
-	)
-	msg.ReplyMarkup = btn
-	bot.Send(msg)
-}
+			switch data {
+			case "free_lesson":
+				video := tgbotapi.NewVideo(chatID, tgbotapi.FileID("BAACAgIAAxkBAAMPaDQXibPXuGm8U9wG_KjFDwrJ8JkAAlVqAAJOBKFJ0BS7KrQcUS82BA"))
+				video.Caption = "Вот бесплатный видеоурок!\n\nХочешь узнать, какие нейросети я использую в Reels?"
+				video.ReplyMarkup = secondInlineKeyboard()
+				if _, err := bot.Send(video); err != nil {
+					log.Println("Ошибка отправки видео:", err)
+				}
 
-func sendStage2(bot *tgbotapi.BotAPI, chatID int64) {
-	doc := tgbotapi.NewDocument(chatID, tgbotapi.FileID("BQACAgIAAxkBAAMUaDQYsojlC47_ygUxnhYkdZGrCEwAAoBqAAJOBKFJGvpBU-vHqYo2BA"))
-	doc.Caption = "Вот твой чек-лист ✅"
-	bot.Send(doc)
+			case "ai_tools":
+				doc := tgbotapi.NewDocument(chatID, tgbotapi.FileID("BQACAgIAAxkBAAMUaDQYsojlC47_ygUxnhYkdZGrCEwAAoBqAAJOBKFJGvpBU-vHqYo2BA"))
+				doc.Caption = "Вот чек-лист нейросетей, которые я использую 💡"
+				doc.ReplyMarkup = thirdInlineKeyboard()
+				if _, err := bot.Send(doc); err != nil {
+					log.Printf("Ошибка отправки PDF: %v", err)
+				}
 
-	msg := tgbotapi.NewMessage(chatID, "Хочешь примеры крутых Reels?")
-	btn := tgbotapi.NewInlineKeyboardMarkup(
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("Да, покажи", "reels"),
-		),
-	)
-	msg.ReplyMarkup = btn
-	bot.Send(msg)
-}
+			case "watch_reels":
+				video := tgbotapi.NewVideo(chatID, tgbotapi.FileID("BAACAgIAAxkBAAMWaDVurVxdzzx3_2JS8c0DTXLsrWMAAhxvAAIYyaFJaxtuxnFLdGE2BA"))
+				video.Caption = "Вот примеры Reels, которые я создаю с помощью нейросетей 🔥"
+				video.ReplyMarkup = finalInlineKeyboard()
+				if _, err := bot.Send(video); err != nil {
+					log.Printf("Ошибка отправки Reels-видео: %v", err)
+				}
 
-func sendStage3(bot *tgbotapi.BotAPI, chatID int64) {
-	video := tgbotapi.NewVideo(chatID, tgbotapi.FileID("BAACAgIAAxkBAAMWaDVurVxdzzx3_2JS8c0DTXLsrWMAAhxvAAIYyaFJaxtuxnFLdGE2BA"))
-	video.Caption = "Ты всё ещё думаешь, что крутые Reels — это только для профи с дорогой техникой?"
-	bot.Send(video)
+			case "course_learn":
+				msg := tgbotapi.NewMessage(chatID, `🔮 Ты всё ещё думаешь, что крутые Reels — это только для профи с дорогой техникой?
+👉 А что если я скажу, что ты можешь создавать WOW-видео с нуля, буквально по тексту или фото — с помощью нейросетей? Даже если ты полный новичок.
 
-	msg := tgbotapi.NewMessage(chatID, "🔮 Ты всё ещё думаешь, что крутые Reels — это только для профи с дорогой техникой?\n👉 А что если я скажу, что ты можешь создавать WOW-видео с нуля, буквально по тексту или фото — с помощью нейросетей? Даже если ты полный новичок.\n\n🎬 Представь:\n— ты загружаешь фото — и через пару минут у тебя готово стильное видео\n— пишешь пару строк — и нейросеть превращает это в динамичный ролик\n— заменяешь фон, одежду, даже лицо в кадре — и всё это на телефоне\n\n🔥 На курсе «Reels с помощью нейросетей, даже если ты новичок» ты освоишь навыки, которые прокачают тебя до уровня продюсера контента нового поколения:\n\n✅ Создавать видео по тексту и фото — без съёмки\n✅ Работать с 3D-объектами и внедрять их в Reels\n✅ Использовать DeepFake-технологии для эффектной замены лиц\n✅ Генерировать предметы, реквизит, декорации и одежду\n✅ Делать Reels для брендов и продавать свои навыки\n✅ Стилизовать видео под любой жанр или настроение — от кино до fashion\n✅ И главное — освоишь базу, нужную для уверенной работы с нейросетями и мобильными приложениями\n\n📲 Никакой сложной графики. Только конкретные инструменты, готовые сценарии и разбор твоих роликов.\n\n🌟 Это обучение — твой шаг в будущее, где технологии работают на тебя, а ты — создаёшь вирусный, креативный и монетизируемый контент.")
-	btn := tgbotapi.NewInlineKeyboardMarkup(
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("Хочу курс", "course"),
-		),
-	)
-	msg.ReplyMarkup = btn
-	bot.Send(msg)
-}
+🎬 Представь:
+— ты загружаешь фото — и через пару минут у тебя готово стильное видео
+— пишешь пару строк — и нейросеть превращает это в динамичный ролик
+— заменяешь фон, одежду, даже лицо в кадре — и всё это на телефоне
 
-func sendStage4(bot *tgbotapi.BotAPI, chatID int64) {
-	msg := tgbotapi.NewMessage(chatID, "Хочешь на обучение? Напиши в чат «ХОЧУ НА КУРС» и я всё расскажу 🔥")
-	bot.Send(msg)
-}
+🔥 На курсе «Reels с помощью нейросетей, даже если ты новичок» ты освоишь навыки, которые прокачают тебя до уровня продюсера контента нового поколения:
 
-// ---------------------------
-// Напоминалки через 1 и 2 дня
-// ---------------------------
+✅ Создавать видео по тексту и фото — без съёмки
+✅ Работать с 3D-объектами и внедрять их в Reels
+✅ Использовать DeepFake-технологии для эффектной замены лиц
+✅ Генерировать предметы, реквизит, декорации и одежду
+✅ Делать Reels для брендов и продавать свои навыки
+✅ Стилизовать видео под любой жанр или настроение — от кино до fashion
+✅ И главное — освоишь базу, нужную для уверенной работы с нейросетями и мобильными приложениями
 
-func reminderScheduler(bot *tgbotapi.BotAPI) {
-	ticker := time.NewTicker(time.Hour * 1)
-	defer ticker.Stop()
+📲 Никакой сложной графики. Только конкретные инструменты, готовые сценарии и разбор твоих роликов.
 
-	for {
-		<-ticker.C
-		now := time.Now()
+🌟 Это обучение — твой шаг в будущее, где технологии работают на тебя, а ты — создаёшь вирусный, креативный и монетизируемый контент.`)
 
-		for chatID, state := range userStates {
-			if state.Stage < 4 {
-				since := now.Sub(state.LastAction)
+				if _, err := bot.Send(msg); err != nil {
+					log.Println("Ошибка отправки текста об обучении:", err)
+				}
 
-				if since > 24*time.Hour && since < 25*time.Hour {
-					sendReminder(bot, chatID, 1)
-				} else if since > 48*time.Hour && since < 49*time.Hour {
-					sendReminder(bot, chatID, 2)
+			case "choose_tariff":
+				msg := tgbotapi.NewMessage(chatID, "Выбери тариф:")
+				msg.ReplyMarkup = tariffKeyboard()
+				if _, err := bot.Send(msg); err != nil {
+					log.Println("Ошибка отправки выбора тарифа:", err)
+				}
+
+			case "tariff_support":
+				msg := tgbotapi.NewMessage(chatID, "Ты выбрал тариф с поддержкой от автора. Вот ссылка для оплаты:\nhttps://murat.courstore.com/ru/courses/copy-524189-2")
+				if _, err := bot.Send(msg); err != nil {
+					log.Println("Ошибка отправки сообщения тарифа поддержки:", err)
+				}
+
+			case "tariff_classic":
+				msg := tgbotapi.NewMessage(chatID, "Ты выбрал классический тариф. Вот ссылка для оплаты:\nhttps://murat.courstore.com/ru/courses/524189")
+				if _, err := bot.Send(msg); err != nil {
+					log.Println("Ошибка отправки сообщения классического тарифа:", err)
 				}
 			}
 		}
 	}
 }
 
-func sendReminder(bot *tgbotapi.BotAPI, chatID int64, day int) {
-	var text string
-	if day == 1 {
-		text = "Ты ещё думаешь? Урок ждёт тебя 👉"
-	} else if day == 2 {
-		text = "Если есть вопросы — пиши, я помогу 💬"
-	}
+func reminderLoop(bot *tgbotapi.BotAPI) {
+	firstReminderSent := make(map[int64]bool)
+	secondReminderSent := make(map[int64]bool)
 
-	msg := tgbotapi.NewMessage(chatID, text)
-	bot.Send(msg)
+	for {
+		time.Sleep(24 * time.Hour)
+
+		waitingUsersMu.Lock()
+		for chatID := range waitingUsers {
+			if !firstReminderSent[chatID] {
+				msg := tgbotapi.NewMessage(chatID, "Привет! Напоминаем, что ты записался на курс. Если хочешь, напиши 'ХОЧУ НА КУРС' для подтверждения.")
+				if _, err := bot.Send(msg); err != nil {
+					log.Println("Ошибка отправки первого напоминания:", err)
+				} else {
+					firstReminderSent[chatID] = true
+				}
+			}
+		}
+		waitingUsersMu.Unlock()
+
+		time.Sleep(24 * time.Hour)
+
+		waitingUsersMu.Lock()
+		for chatID := range waitingUsers {
+			if !secondReminderSent[chatID] {
+				msg := tgbotapi.NewMessage(chatID, "Это финальное напоминание! Если есть вопросы, пиши, я помогу.")
+				if _, err := bot.Send(msg); err != nil {
+					log.Println("Ошибка отправки второго напоминания:", err)
+				} else {
+					secondReminderSent[chatID] = true
+				}
+			}
+		}
+		waitingUsersMu.Unlock()
+	}
+}
+
+func firstInlineKeyboard() tgbotapi.InlineKeyboardMarkup {
+	button := tgbotapi.NewInlineKeyboardButtonData("🎥 Бесплатный видеоурок", "free_lesson")
+	return tgbotapi.NewInlineKeyboardMarkup(tgbotapi.NewInlineKeyboardRow(button))
+}
+
+func secondInlineKeyboard() tgbotapi.InlineKeyboardMarkup {
+	button := tgbotapi.NewInlineKeyboardButtonData("🤖 Нейросети для контента", "ai_tools")
+	return tgbotapi.NewInlineKeyboardMarkup(tgbotapi.NewInlineKeyboardRow(button))
+}
+
+func thirdInlineKeyboard() tgbotapi.InlineKeyboardMarkup {
+	button := tgbotapi.NewInlineKeyboardButtonData("📱 Смотреть Reels", "watch_reels")
+	return tgbotapi.NewInlineKeyboardMarkup(tgbotapi.NewInlineKeyboardRow(button))
+}
+
+func finalInlineKeyboard() tgbotapi.InlineKeyboardMarkup {
+	button1 := tgbotapi.NewInlineKeyboardButtonData("📚 Хочу обучение", "course_learn")
+	button2 := tgbotapi.NewInlineKeyboardButtonData("💬 Выбрать тариф", "choose_tariff")
+	return tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(button1),
+		tgbotapi.NewInlineKeyboardRow(button2),
+	)
+}
+
+func tariffKeyboard() tgbotapi.InlineKeyboardMarkup {
+	buttonSupport := tgbotapi.NewInlineKeyboardButtonData("С поддержкой от автора", "tariff_support")
+	buttonClassic := tgbotapi.NewInlineKeyboardButtonData("Классический тариф", "tariff_classic")
+	return tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(buttonSupport),
+		tgbotapi.NewInlineKeyboardRow(buttonClassic),
+	)
 }
