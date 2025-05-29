@@ -1,4 +1,4 @@
-FROM golang:1.22
+FROM golang:1.24
 
 WORKDIR /app
 
@@ -7,6 +7,6 @@ RUN go mod download
 
 COPY . .
 
-RUN go build -o bot
+RUN go build -o bot .
 
 CMD ["./bot"]
