@@ -124,6 +124,13 @@ func main() {
 
 				if _, err := bot.Send(msg); err != nil {
 					log.Println("Ошибка отправки текста об обучении:", err)
+				} else {
+					// Отправляем второе сообщение с кнопкой выбора тарифов
+					tariffMsg := tgbotapi.NewMessage(chatID, "Выбери подходящий тариф обучения:")
+					tariffMsg.ReplyMarkup = tariffKeyboard()
+					if _, err := bot.Send(tariffMsg); err != nil {
+						log.Println("Ошибка отправки выбора тарифа после информации о курсе:", err)
+					}
 				}
 
 			case "choose_tariff":
@@ -202,12 +209,8 @@ func thirdInlineKeyboard() tgbotapi.InlineKeyboardMarkup {
 }
 
 func finalInlineKeyboard() tgbotapi.InlineKeyboardMarkup {
-	button1 := tgbotapi.NewInlineKeyboardButtonData("📚 Хочу обучение", "course_learn")
-	button2 := tgbotapi.NewInlineKeyboardButtonData("💬 Выбрать тариф", "choose_tariff")
-	return tgbotapi.NewInlineKeyboardMarkup(
-		tgbotapi.NewInlineKeyboardRow(button1),
-		tgbotapi.NewInlineKeyboardRow(button2),
-	)
+	button := tgbotapi.NewInlineKeyboardButtonData("📚 Хочу обучение", "course_learn")
+	return tgbotapi.NewInlineKeyboardMarkup(tgbotapi.NewInlineKeyboardRow(button))
 }
 
 func tariffKeyboard() tgbotapi.InlineKeyboardMarkup {
