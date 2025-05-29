@@ -1,10 +1,6 @@
-FROM golang:1.24 AS builder
+FROM golang:1.22
 
 WORKDIR /app
-
-# Отключаем proxy для приватных/нестандартных путей
-ENV GOPRIVATE=freelans/*
-ENV GOPROXY=direct
 
 COPY go.mod go.sum ./
 RUN go mod download
@@ -12,3 +8,5 @@ RUN go mod download
 COPY . .
 
 RUN go build -o bot
+
+CMD ["./bot"]
