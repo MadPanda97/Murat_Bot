@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/joho/godotenv"
 	"log"
 	"strings"
 	"sync"
@@ -11,7 +12,7 @@ import (
 )
 
 var (
-	waitingUsers   = make(map[int64]struct{})
+	waitingUsers   = make(map[int64]time.Time) // Изменено: теперь храним время регистрации
 	waitingUsersMu sync.Mutex
 )
 
@@ -41,16 +42,17 @@ func main() {
 			chatID := update.Message.Chat.ID
 
 			switch {
-			case strings.Contains(text, "хочу урок"):
+			case update.Message.IsCommand() && update.Message.Command() == "start":
+				// Обработка команды /start
 				msg := tgbotapi.NewMessage(chatID, "Привет! Вот бесплатный видеоурок 👇")
 				msg.ReplyMarkup = firstInlineKeyboard()
 				if _, err := bot.Send(msg); err != nil {
-					log.Println("Ошибка отправки по ключевому слову:", err)
+					log.Println("Ошибка отправки приветственного сообщения:", err)
 				}
 
 			case text == "хочу на курс":
 				waitingUsersMu.Lock()
-				waitingUsers[chatID] = struct{}{}
+				waitingUsers[chatID] = time.Now()
 				waitingUsersMu.Unlock()
 
 				msg := tgbotapi.NewMessage(chatID, "Отлично! Ты записан на обучение. Мы напомним тебе через 1 и 2 дня.")
@@ -161,34 +163,35 @@ func reminderLoop(bot *tgbotapi.BotAPI) {
 	secondReminderSent := make(map[int64]bool)
 
 	for {
-		time.Sleep(24 * time.Hour)
+		time.Sleep(1 * time.Hour) // Проверяем каждый час
 
+		now := time.Now()
 		waitingUsersMu.Lock()
-		for chatID := range waitingUsers {
-			if !firstReminderSent[chatID] {
+
+		for chatID, registrationTime := range waitingUsers {
+			// Проверяем, прошло ли 24 часа с момента регистрации
+			if !firstReminderSent[chatID] && now.Sub(registrationTime) >= 24*time.Hour {
 				msg := tgbotapi.NewMessage(chatID, "Привет! Напоминаем, что ты записался на курс. Если хочешь, напиши 'ХОЧУ НА КУРС' для подтверждения.")
 				if _, err := bot.Send(msg); err != nil {
 					log.Println("Ошибка отправки первого напоминания:", err)
 				} else {
 					firstReminderSent[chatID] = true
+					log.Printf("Отправлено первое напоминание пользователю %d", chatID)
 				}
 			}
-		}
-		waitingUsersMu.Unlock()
 
-		time.Sleep(24 * time.Hour)
-
-		waitingUsersMu.Lock()
-		for chatID := range waitingUsers {
-			if !secondReminderSent[chatID] {
+			// Проверяем, прошло ли 48 часов с момента регистрации
+			if !secondReminderSent[chatID] && now.Sub(registrationTime) >= 48*time.Hour {
 				msg := tgbotapi.NewMessage(chatID, "Это финальное напоминание! Если есть вопросы, пиши, я помогу.")
 				if _, err := bot.Send(msg); err != nil {
 					log.Println("Ошибка отправки второго напоминания:", err)
 				} else {
 					secondReminderSent[chatID] = true
+					log.Printf("Отправлено второе напоминание пользователю %d", chatID)
 				}
 			}
 		}
+
 		waitingUsersMu.Unlock()
 	}
 }
@@ -220,4 +223,11 @@ func tariffKeyboard() tgbotapi.InlineKeyboardMarkup {
 		tgbotapi.NewInlineKeyboardRow(buttonSupport),
 		tgbotapi.NewInlineKeyboardRow(buttonClassic),
 	)
+}
+
+func init() {
+	err := godotenv.Load()
+	if err != nil {
+		log.Println("Не удалось загрузить .env файл:", err)
+	}
 }
