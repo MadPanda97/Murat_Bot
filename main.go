@@ -43,9 +43,8 @@ func main() {
 
 			switch {
 			case update.Message.IsCommand() && update.Message.Command() == "start":
-				// Обработка команды /start
-				msg := tgbotapi.NewMessage(chatID, "Привет! Вот бесплатный видеоурок 👇")
-				msg.ReplyMarkup = firstInlineKeyboard()
+				// Обработка команды /start - просто приветствие без видео
+				msg := tgbotapi.NewMessage(chatID, "Привет! Я бот для обучения созданию Reels с помощью нейросетей.")
 				if _, err := bot.Send(msg); err != nil {
 					log.Println("Ошибка отправки приветственного сообщения:", err)
 				}
@@ -58,6 +57,24 @@ func main() {
 				msg := tgbotapi.NewMessage(chatID, "Отлично! Ты записан на обучение. Мы напомним тебе через 1 и 2 дня.")
 				if _, err := bot.Send(msg); err != nil {
 					log.Println("Ошибка отправки подтверждения записи на курс:", err)
+				}
+
+			case text == "хочу урок":
+				// Отправляем первое видео при получении текста "хочу урок"
+				video := tgbotapi.NewVideo(chatID, tgbotapi.FileID("BAACAgIAAxkBAAMPaDQXibPXuGm8U9wG_KjFDwrJ8JkAAlVqAAJOBKFJ0BS7KrQcUS82BA"))
+				video.Caption = "Вот бесплатный видеоурок!\n\nХочешь узнать, какие нейросети я использую в Reels?"
+				video.ReplyMarkup = secondInlineKeyboard()
+				if _, err := bot.Send(video); err != nil {
+					log.Println("Ошибка отправки первого видео:", err)
+				}
+
+			case text == "урок":
+				// Отправляем второе видео при получении текста "урок"
+				video := tgbotapi.NewVideo(chatID, tgbotapi.FileID("BAACAgIAAxkBAAOqaEKaNA_S86x5zT0x9wu1Ot75Be8AAqB2AAIuOQhKZ47zBXBvHLU2BA"))
+				video.Caption = "Вот еще один видеоурок!\n\nХочешь узнать, какие нейросети я использую в Reels?"
+				video.ReplyMarkup = secondInlineKeyboard()
+				if _, err := bot.Send(video); err != nil {
+					log.Println("Ошибка отправки второго видео:", err)
 				}
 
 			default:
