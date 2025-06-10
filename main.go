@@ -43,10 +43,26 @@ func main() {
 
 			switch {
 			case update.Message.IsCommand() && update.Message.Command() == "start":
-				// Обработка команды /start - просто приветствие без видео
-				msg := tgbotapi.NewMessage(chatID, "Привет! Я бот для обучения созданию Reels с помощью нейросетей.")
-				if _, err := bot.Send(msg); err != nil {
-					log.Println("Ошибка отправки приветственного сообщения:", err)
+				args := update.Message.CommandArguments()
+
+				switch args {
+				case "урок":
+					video := tgbotapi.NewVideo(chatID, tgbotapi.FileID("BAACAgIAAxkBAAMPaDQXibPXuGm8U9wG_KjFDwrJ8JkAAlVqAAJOBKFJ0BS7KrQcUS82BA"))
+					video.Caption = "Вот видеоурок!\n\nХочешь узнать, какие нейросети я использую в Reels?"
+					if _, err := bot.Send(video); err != nil {
+						log.Println("Ошибка отправки видео (урок):", err)
+					}
+				case "хочу урок":
+					video := tgbotapi.NewVideo(chatID, tgbotapi.FileID("BAACAgIAAxkBAAOqaEKaNA_S86x5zT0x9wu1Ot75Be8AAqB2AAIuOQhKZ47zBXBvHLU2BA"))
+					video.Caption = "Вот бесплатный видеоурок!\n\nХочешь узнать, какие нейросети я использую в Reels?"
+					if _, err := bot.Send(video); err != nil {
+						log.Println("Ошибка отправки видео (хочу урок):", err)
+					}
+				default:
+					msg := tgbotapi.NewMessage(chatID, "Привет! Я бот для обучения созданию Reels с помощью нейросетей.")
+					if _, err := bot.Send(msg); err != nil {
+						log.Println("Ошибка отправки приветственного сообщения:", err)
+					}
 				}
 
 			case text == "хочу на курс":
@@ -60,7 +76,6 @@ func main() {
 				}
 
 			case text == "хочу урок":
-				// Отправляем первое видео при получении текста "хочу урок"
 				video := tgbotapi.NewVideo(chatID, tgbotapi.FileID("BAACAgIAAxkBAAMPaDQXibPXuGm8U9wG_KjFDwrJ8JkAAlVqAAJOBKFJ0BS7KrQcUS82BA"))
 				video.Caption = "Вот бесплатный видеоурок!\n\nХочешь узнать, какие нейросети я использую в Reels?"
 				video.ReplyMarkup = secondInlineKeyboard()
@@ -69,7 +84,6 @@ func main() {
 				}
 
 			case text == "урок":
-				// Отправляем второе видео при получении текста "урок"
 				video := tgbotapi.NewVideo(chatID, tgbotapi.FileID("BAACAgIAAxkBAAOqaEKaNA_S86x5zT0x9wu1Ot75Be8AAqB2AAIuOQhKZ47zBXBvHLU2BA"))
 				video.Caption = "Вот еще один видеоурок!\n\nХочешь узнать, какие нейросети я использую в Reels?"
 				video.ReplyMarkup = secondInlineKeyboard()
@@ -144,7 +158,6 @@ func main() {
 				if _, err := bot.Send(msg); err != nil {
 					log.Println("Ошибка отправки текста об обучении:", err)
 				} else {
-					// Отправляем второе сообщение с кнопкой выбора тарифов
 					tariffMsg := tgbotapi.NewMessage(chatID, "Выбери подходящий тариф обучения:")
 					tariffMsg.ReplyMarkup = tariffKeyboard()
 					if _, err := bot.Send(tariffMsg); err != nil {
@@ -180,13 +193,12 @@ func reminderLoop(bot *tgbotapi.BotAPI) {
 	secondReminderSent := make(map[int64]bool)
 
 	for {
-		time.Sleep(1 * time.Hour) // Проверяем каждый час
+		time.Sleep(1 * time.Hour)
 
 		now := time.Now()
 		waitingUsersMu.Lock()
 
 		for chatID, registrationTime := range waitingUsers {
-			// Проверяем, прошло ли 24 часа с момента регистрации
 			if !firstReminderSent[chatID] && now.Sub(registrationTime) >= 24*time.Hour {
 				msg := tgbotapi.NewMessage(chatID, "Привет! Напоминаем, что ты записался на курс. Если хочешь, напиши 'ХОЧУ НА КУРС' для подтверждения.")
 				if _, err := bot.Send(msg); err != nil {
@@ -197,7 +209,6 @@ func reminderLoop(bot *tgbotapi.BotAPI) {
 				}
 			}
 
-			// Проверяем, прошло ли 48 часов с момента регистрации
 			if !secondReminderSent[chatID] && now.Sub(registrationTime) >= 48*time.Hour {
 				msg := tgbotapi.NewMessage(chatID, "Это финальное напоминание! Если есть вопросы, пиши, я помогу.")
 				if _, err := bot.Send(msg); err != nil {
