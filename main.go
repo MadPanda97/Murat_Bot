@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/joho/godotenv"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -11,7 +12,7 @@ import (
 )
 
 var (
-	waitingUsers   = make(map[int64]time.Time)
+	waitingUsers   = make(map[int64]time.Time) // Изменено: теперь храним время регистрации
 	waitingUsersMu sync.Mutex
 )
 
@@ -36,6 +37,68 @@ func main() {
 	go reminderLoop(bot)
 
 	for update := range updates {
+		if update.Message != nil {
+			text := strings.ToLower(update.Message.Text)
+			chatID := update.Message.Chat.ID
+
+			switch {
+			case update.Message.IsCommand() && update.Message.Command() == "start":
+				args := strings.ToLower(strings.TrimSpace(update.Message.CommandArguments()))
+				log.Println("Получен аргумент:", args)
+
+				switch args {
+				case "урок":
+					video := tgbotapi.NewVideo(chatID, tgbotapi.FileID("BAACAgIAAxkBAAMPaDQXibPXuGm8U9wG_KjFDwrJ8JkAAlVqAAJOBKFJ0BS7KrQcUS82BA"))
+					video.Caption = "Вот видеоурок!\n\nХочешь узнать, какие нейросети я использую в Reels?"
+					if _, err := bot.Send(video); err != nil {
+						log.Println("Ошибка отправки видео (урок):", err)
+					}
+				case "хочу_урок":
+					video := tgbotapi.NewVideo(chatID, tgbotapi.FileID("BAACAgIAAxkBAAOqaEKaNA_S86x5zT0x9wu1Ot75Be8AAqB2AAIuOQhKZ47zBXBvHLU2BA"))
+					video.Caption = "Вот бесплатный видеоурок!\n\nХочешь узнать, какие нейросети я использую в Reels?"
+					if _, err := bot.Send(video); err != nil {
+						log.Println("Ошибка отправки видео (хочу урок):", err)
+					}
+				default:
+					msg := tgbotapi.NewMessage(chatID, "Привет! Я бот для обучения созданию Reels с помощью нейросетей.")
+					if _, err := bot.Send(msg); err != nil {
+						log.Println("Ошибка отправки приветственного сообщения:", err)
+					}
+				}
+
+			case text == "хочу на курс":
+				waitingUsersMu.Lock()
+				waitingUsers[chatID] = time.Now()
+				waitingUsersMu.Unlock()
+
+				msg := tgbotapi.NewMessage(chatID, "Отлично! Ты записан на обучение. Мы напомним тебе через 1 и 2 дня.")
+				if _, err := bot.Send(msg); err != nil {
+					log.Println("Ошибка отправки подтверждения записи на курс:", err)
+				}
+
+			case text == "хочу урок":
+				video := tgbotapi.NewVideo(chatID, tgbotapi.FileID("BAACAgIAAxkBAAMPaDQXibPXuGm8U9wG_KjFDwrJ8JkAAlVqAAJOBKFJ0BS7KrQcUS82BA"))
+				video.Caption = "Вот бесплатный видеоурок!\n\nХочешь узнать, какие нейросети я использую в Reels?"
+				video.ReplyMarkup = secondInlineKeyboard()
+				if _, err := bot.Send(video); err != nil {
+					log.Println("Ошибка отправки первого видео:", err)
+				}
+
+			case text == "урок":
+				video := tgbotapi.NewVideo(chatID, tgbotapi.FileID("BAACAgIAAxkBAAOqaEKaNA_S86x5zT0x9wu1Ot75Be8AAqB2AAIuOQhKZ47zBXBvHLU2BA"))
+				video.Caption = "Вот еще один видеоурок!\n\nХочешь узнать, какие нейросети я использую в Reels?"
+				video.ReplyMarkup = secondInlineKeyboard()
+				if _, err := bot.Send(video); err != nil {
+					log.Println("Ошибка отправки второго видео:", err)
+				}
+
+			default:
+				if update.Message.Video != nil {
+					log.Printf("Video FileID: %s", update.Message.Video.FileID)
+				}
+			}
+		}
+
 		if update.CallbackQuery != nil {
 			callback := tgbotapi.NewCallback(update.CallbackQuery.ID, "")
 			if _, err := bot.Request(callback); err != nil {
@@ -92,6 +155,7 @@ func main() {
 📲 Никакой сложной графики. Только конкретные инструменты, готовые сценарии и разбор твоих роликов.
 
 🌟 Это обучение — твой шаг в будущее, где технологии работают на тебя, а ты — создаёшь вирусный, креативный и монетизируемый контент.`)
+
 				if _, err := bot.Send(msg); err != nil {
 					log.Println("Ошибка отправки текста об обучении:", err)
 				} else {
