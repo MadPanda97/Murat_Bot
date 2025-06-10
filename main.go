@@ -43,7 +43,8 @@ func main() {
 
 			switch {
 			case update.Message.IsCommand() && update.Message.Command() == "start":
-				args := update.Message.CommandArguments()
+				args := strings.ToLower(strings.TrimSpace(update.Message.CommandArguments()))
+				log.Println("Получен аргумент:", args)
 
 				switch args {
 				case "урок":
@@ -52,7 +53,7 @@ func main() {
 					if _, err := bot.Send(video); err != nil {
 						log.Println("Ошибка отправки видео (урок):", err)
 					}
-				case "хочу урок":
+				case "хочу_урок":
 					video := tgbotapi.NewVideo(chatID, tgbotapi.FileID("BAACAgIAAxkBAAOqaEKaNA_S86x5zT0x9wu1Ot75Be8AAqB2AAIuOQhKZ47zBXBvHLU2BA"))
 					video.Caption = "Вот бесплатный видеоурок!\n\nХочешь узнать, какие нейросети я использую в Reels?"
 					if _, err := bot.Send(video); err != nil {
