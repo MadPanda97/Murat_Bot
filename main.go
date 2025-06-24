@@ -5,6 +5,7 @@ import (
 	"github.com/joho/godotenv"
 	"log"
 	"os"
+	"strings"
 	"sync"
 	"time"
 )
@@ -59,7 +60,10 @@ func main() {
 		if update.Message != nil {
 			chatID := update.Message.Chat.ID
 
-			if update.Message.IsCommand() && update.Message.Command() == "start" {
+			// Проверяем команду /start или ключевое слово "хочу"
+			if (update.Message.IsCommand() && update.Message.Command() == "start") ||
+				(update.Message.Text != "" && strings.ToLower(update.Message.Text) == "хочу") {
+
 				usersMutex.Lock()
 				users[chatID] = &UserInfo{
 					State:        StateStart,
