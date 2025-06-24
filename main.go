@@ -155,7 +155,7 @@ func main() {
 
 				msg := tgbotapi.NewMessage(chatID, `💳 Оплата:
 Переведи 4 900 ₸ на Kaspi:
-https://pay.kaspi.kz/pay/s2ompo9l
+https://pay.kaspi.kz/pay/s2ompo9l 
 
 📝 В комментарии укажи:
 "ЗАВТРАК + Имя"
