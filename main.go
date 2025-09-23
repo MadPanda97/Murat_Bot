@@ -1,13 +1,14 @@
 package main
 
 import (
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"github.com/joho/godotenv"
 	"log"
 	"os"
 	"strings"
 	"sync"
 	"time"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/joho/godotenv"
 )
 
 type UserInfo struct {
@@ -23,12 +24,11 @@ var (
 )
 
 const (
-	StateStart             = "start"
-	StatePDF               = "pdf"
-	StateBreakfastInfo     = "breakfast_info"
-	StatePayment           = "payment"
-	StateWaitingScreenshot = "waiting_screenshot"
-	StatePaid              = "paid"
+	StateStart      = "start"
+	StatePDF        = "pdf"
+	StateCourseInfo = "course_info"
+	StatePayment    = "payment"
+	StatePaid       = "paid"
 )
 
 func main() {
@@ -54,8 +54,6 @@ func main() {
 	u.Timeout = 60
 	updates := bot.GetUpdatesChan(u)
 
-	go sendReminders(bot)
-
 	for update := range updates {
 		if update.Message != nil {
 			chatID := update.Message.Chat.ID
@@ -76,22 +74,6 @@ func main() {
 				msg.ReplyMarkup = welcomeKeyboard()
 				if _, err := bot.Send(msg); err != nil {
 					log.Println("Ошибка отправки приветственного сообщения:", err)
-				}
-			} else if update.Message.Photo != nil {
-				usersMutex.Lock()
-				userInfo, exists := users[chatID]
-				usersMutex.Unlock()
-
-				if exists && userInfo.State == StateWaitingScreenshot {
-					usersMutex.Lock()
-					userInfo.State = StatePaid
-					userInfo.Paid = true
-					usersMutex.Unlock()
-
-					msg := tgbotapi.NewMessage(chatID, "✅ Спасибо за скриншот! Я проверю оплату и подтвержу твоё участие.\n\n📍 Адрес проведения бизнес-завтрака будет отправлен за день до мероприятия.\n\nДо встречи 28 июня! ☕️")
-					if _, err := bot.Send(msg); err != nil {
-						log.Println("Ошибка отправки подтверждения получения скриншота:", err)
-					}
 				}
 			}
 		}
@@ -114,38 +96,75 @@ func main() {
 				usersMutex.Unlock()
 
 				doc := tgbotapi.NewDocument(chatID, tgbotapi.FileID("BQACAgIAAxkBAAMUaDQYsojlC47_ygUxnhYkdZGrCEwAAoBqAAJOBKFJGvpBU-vHqYo2BA"))
-				doc.Caption = "📘 Вот твой PDF-гайд:\n5 нейросетей, которые делают Reels за тебя\n\n❗️ А если хочешь вживую увидеть, как они работают, приходи на бизнес-завтрак!"
-				doc.ReplyMarkup = breakfastInfoKeyboard()
+				doc.Caption = "📘 Вот твой PDF-гайд:\n5 нейросетей, которые делают Reels за тебя\n\n❗️ А если хочешь освоить создание коммерческих видео с ИИ за 4 недели, нажми кнопку ниже!"
+				doc.ReplyMarkup = courseInfoKeyboard()
 				if _, err := bot.Send(doc); err != nil {
 					log.Printf("Ошибка отправки PDF: %v", err)
 				}
 
-			case "breakfast_info":
+			case "course_info":
 				usersMutex.Lock()
 				if userInfo, exists := users[chatID]; exists {
-					userInfo.State = StateBreakfastInfo
+					userInfo.State = StateCourseInfo
 				}
 				usersMutex.Unlock()
 
-				msg := tgbotapi.NewMessage(chatID, `📍 Бизнес-завтрак в Семее
-🗓 20 Июля | 🕐 13:00
-📍 Уютная кофейня (точный адрес после оплаты)
-💸 Участие: 3 900 ₸
-👥 Только 12 мест
+				msg := tgbotapi.NewMessage(chatID, `🎬 Создавайте коммерческие видео с ИИ за 4 недели
 
-🎁 Что ты получишь:
-– PDF + демонстрация нейросетей
-– Reels, которые продают
-- Доступ к более чем 70-ти нейросетям в одном месте
-- Как сэкономить на подписках на нейросети
-- Сделаем фотосессии в нейросетях
-- Тысячи готовых шаблонов эффективных промтов для качественных генериаций
-– Нетворкинг
+🚀 Без студии, не нужен мощный телефон или компьютер.
 
-👇 Чтобы зафиксировать место, внеси предоплату.`)
-				msg.ReplyMarkup = paymentKeyboard()
+Освойте инструменты AI, соберите портфолио и подготовьтесь к первым заказам. Формат: записи 24/7, доступ 6 месяцев.
+
+💡 За месяц вы научитесь создавать контент с помощью AI.
+
+✨ Вы будете выгодно отличаться от множества одинаковых работ: вместо типовых роликов — заметные видео под задачи клиентов.
+
+🎯 Дам рекомендации, где и как искать клиентов. Вы получите доступ к чатам, где публикуются заказы.
+
+📋 Главное — вы перестанете действовать бессистемно: начнете работать по четкому пайплайну, соберите портфолио и подготовитесь к первым заказам.
+
+🏠 Работать можно из дома и часто без съемок: достаточно телефона или ноутбука.
+
+👥 Для кого:
+• Новички в видео и SMM, которым нужна быстрая, прикладная база по AI-видео
+• Создатели контента, желающие повысить чек и ускорить продакшн
+• Фрилансеры, которые хотят находить клиентов и работать из дома
+
+🎁 Что вы получите за месяц:
+• Видео для клиентов с помощью ИИ для портфолио: из текста, из фото, для брендов
+• Понимание пайплайна: от идеи и референсов до финального видео
+• Рекомендации по поиску клиентов и доступ в чаты с заказами`)
+
+				// Отправляем первое сообщение
 				if _, err := bot.Send(msg); err != nil {
-					log.Println("Ошибка отправки информации о бизнес-завтраке:", err)
+					log.Println("Ошибка отправки информации о курсе:", err)
+				}
+
+				// Отправляем второе сообщение с программой курса
+				msg2 := tgbotapi.NewMessage(chatID, `📚 Программа курса (модули):
+• Работа с нейросетями: Runway, Pika, CapCut, Midjourney, Kling, Nano Banana и др
+• Подготовительный модуль: основы ИИ для видео
+• Видео из текста и фото: генерация, стили, референсы, монтаж и звук
+• 3D и интеграции: создание/импорт 3D‑объектов, внедрение в кадр
+• Бренд‑видео с нейросетями: работа под задачу клиента, адаптация под форматы Reels/Shorts/TikTok
+• Генерация предметов и сцен: декорации, реквизит, смена пространства и одежды
+• Коммерция: упаковка портфолио, чек‑лист качества, поиск клиентов, коммуникация и чек
+
+📖 Формат и поддержка:
+• Уроки в записи, доступ 24/7 на 6 месяцев
+• Разбитие на модули с практикой
+• Комьюнити и чаты с заказами
+• Обратная связь по домашним заданиям
+• В ближайшие дни добавим новые актуальные уроки
+
+🏆 Результат:
+• Собранное мини‑портфолио
+• Понимание, где и как искать первые заказы
+• Готовые шаблоны и чек‑листы, чтобы работать быстрее и дороже`)
+
+				msg2.ReplyMarkup = paymentKeyboard()
+				if _, err := bot.Send(msg2); err != nil {
+					log.Println("Ошибка отправки программы курса:", err)
 				}
 
 			case "payment":
@@ -155,70 +174,25 @@ func main() {
 				}
 				usersMutex.Unlock()
 
-				photo := tgbotapi.NewPhoto(chatID, tgbotapi.FileID("AgACAgIAAxkBAAIBdGXLXKNXJAABdGXLXKNXJAABdGXLXKNXJ")) // Замените на реальный FileID QR-кода
-				photo.Caption = "📱 Отсканируй QR-код для быстрой оплаты"
-				if _, err := bot.Send(photo); err != nil {
-					log.Println("Ошибка отправки QR-кода:", err)
-				}
+				msg := tgbotapi.NewMessage(chatID, `💳 Записаться на курс "AI-видео за 4 недели"
 
-				msg := tgbotapi.NewMessage(chatID, `💳 Оплата:
-Переведи 3 900 ₸ на Kaspi:
-https://pay.kaspi.kz/pay/s2ompo9l 
+📞 Для записи свяжитесь с менеджером:
+@username_manager
 
-📝 В комментарии укажи:
-"ЗАВТРАК + Имя"
+💰 Стоимость курса и условия оплаты уточняйте у менеджера.
 
-После оплаты — нажми кнопку ниже и пришли скрин перевода.`)
-				msg.ReplyMarkup = sendScreenshotKeyboard()
+🎁 При записи через бота — скидка 10%!
+
+✅ После оплаты вы получите:
+• Доступ ко всем урокам на 6 месяцев
+• Вход в закрытое комьюнити
+• Доступ к чатам с заказами
+• Обратную связь по домашним заданиям`)
+
 				if _, err := bot.Send(msg); err != nil {
 					log.Println("Ошибка отправки информации об оплате:", err)
 				}
-
-			case "send_screenshot":
-				// Обновляем состояние пользователя
-				usersMutex.Lock()
-				if userInfo, exists := users[chatID]; exists {
-					userInfo.State = StateWaitingScreenshot
-				}
-				usersMutex.Unlock()
-
-				// Просим отправить скриншот оплаты (ЭКРАН 5)
-				msg := tgbotapi.NewMessage(chatID, `📥 Пришли, пожалуйста, скрин оплаты (фото Kaspi перевода)
-
-✅ Как только я увижу оплату — ты в списке участников!
-📍 И вышлю адрес за 1 день до мероприятия.
-
-Спасибо за доверие! До встречи 28 июня ☕️`)
-				if _, err := bot.Send(msg); err != nil {
-					log.Println("Ошибка отправки запроса на скриншот:", err)
-				}
 			}
-		}
-	}
-}
-
-// Функция для отправки напоминаний за день до мероприятия
-func sendReminders(bot *tgbotapi.BotAPI) {
-	for {
-		// Проверяем каждый час
-		time.Sleep(1 * time.Hour)
-
-		// Дата мероприятия
-		eventDate := time.Date(2023, time.June, 28, 13, 0, 0, 0, time.Local)
-		now := time.Now()
-
-		// Если до мероприятия осталось 1 день
-		if eventDate.Sub(now) <= 24*time.Hour && eventDate.Sub(now) > 0 {
-			usersMutex.Lock()
-			for chatID, userInfo := range users {
-				if userInfo.Paid {
-					msg := tgbotapi.NewMessage(chatID, "Привет! Напоминаю: завтра встречаемся в 13:00, Семей. Адрес: [тут]")
-					if _, err := bot.Send(msg); err != nil {
-						log.Println("Ошибка отправки напоминания:", err)
-					}
-				}
-			}
-			usersMutex.Unlock()
 		}
 	}
 }
@@ -228,17 +202,12 @@ func welcomeKeyboard() tgbotapi.InlineKeyboardMarkup {
 	return tgbotapi.NewInlineKeyboardMarkup(tgbotapi.NewInlineKeyboardRow(button))
 }
 
-func breakfastInfoKeyboard() tgbotapi.InlineKeyboardMarkup {
-	button := tgbotapi.NewInlineKeyboardButtonData("Узнать о завтраке", "breakfast_info")
+func courseInfoKeyboard() tgbotapi.InlineKeyboardMarkup {
+	button := tgbotapi.NewInlineKeyboardButtonData("Подробнее", "course_info")
 	return tgbotapi.NewInlineKeyboardMarkup(tgbotapi.NewInlineKeyboardRow(button))
 }
 
 func paymentKeyboard() tgbotapi.InlineKeyboardMarkup {
-	button := tgbotapi.NewInlineKeyboardButtonData("Оплатить участие", "payment")
-	return tgbotapi.NewInlineKeyboardMarkup(tgbotapi.NewInlineKeyboardRow(button))
-}
-
-func sendScreenshotKeyboard() tgbotapi.InlineKeyboardMarkup {
-	button := tgbotapi.NewInlineKeyboardButtonData("Отправить скриншот", "send_screenshot")
+	button := tgbotapi.NewInlineKeyboardButtonData("Записаться на курс", "payment")
 	return tgbotapi.NewInlineKeyboardMarkup(tgbotapi.NewInlineKeyboardRow(button))
 }
