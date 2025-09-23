@@ -95,11 +95,19 @@ func main() {
 				}
 				usersMutex.Unlock()
 
+				// Отправляем PDF
 				doc := tgbotapi.NewDocument(chatID, tgbotapi.FileID("BQACAgIAAxkBAAMUaDQYsojlC47_ygUxnhYkdZGrCEwAAoBqAAJOBKFJGvpBU-vHqYo2BA"))
-				doc.Caption = "📘 Вот твой PDF-гайд:\n5 нейросетей, которые делают Reels за тебя\n\n❗️ А если хочешь освоить создание коммерческих видео с ИИ за 4 недели, нажми кнопку ниже!"
-				doc.ReplyMarkup = courseInfoKeyboard()
+				doc.Caption = "📘 Вот твой PDF-гайд:\n5 нейросетей, которые делают Reels за тебя"
 				if _, err := bot.Send(doc); err != nil {
 					log.Printf("Ошибка отправки PDF: %v", err)
+				}
+
+				// Отправляем видео
+				video := tgbotapi.NewVideo(chatID, tgbotapi.FileID("BAACAgIAAxkBAAIBrWjSY0Ey6QwZ3wI_GjPkhXowkRF8AALZhAACmzxRSqv6032r5Wm3NgQ"))
+				video.Caption = "🎬 Урок второй воронка - пример создания видео с ИИ\n\n❗️ А если хочешь освоить создание коммерческих видео с ИИ за 4 недели, нажми кнопку ниже!"
+				video.ReplyMarkup = courseInfoKeyboard()
+				if _, err := bot.Send(video); err != nil {
+					log.Printf("Ошибка отправки видео: %v", err)
 				}
 
 			case "course_info":
