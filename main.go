@@ -110,15 +110,29 @@ func main() {
 				}
 				log.Printf("PDF успешно отправлен пользователю %d", chatID)
 
+				// Небольшая задержка между отправкой PDF и видео
+				time.Sleep(1 * time.Second)
+
 				// Отправляем видео с кнопкой
 				log.Printf("Отправляю видео пользователю %d", chatID)
 				video := tgbotapi.NewVideo(chatID, tgbotapi.FileID("BAACAgIAAxkBAAIBrWjSY0Ey6QwZ3wI_GjPkhXowkRF8AALZhAACmzxRSqv6032r5Wm3NgQ"))
 				video.Caption = "🎬 Урок второй воронка - пример создания видео с ИИ\n\n❗️ А если хочешь освоить создание коммерческих видео с ИИ за 4 недели, нажми кнопку ниже!"
 				video.ReplyMarkup = courseInfoKeyboard()
-				if _, err := bot.Send(video); err != nil {
-					log.Printf("Ошибка отправки видео: %v", err)
-				} else {
-					log.Printf("Видео успешно отправлено пользователю %d", chatID)
+				
+				// Попробуем отправить видео с повторными попытками
+				maxRetries := 3
+				for i := 0; i < maxRetries; i++ {
+					if _, err := bot.Send(video); err != nil {
+						log.Printf("Попытка %d/%d - Ошибка отправки видео: %v", i+1, maxRetries, err)
+						if i == maxRetries-1 {
+							log.Printf("Не удалось отправить видео пользователю %d после %d попыток", chatID, maxRetries)
+						} else {
+							time.Sleep(2 * time.Second)
+						}
+					} else {
+						log.Printf("Видео успешно отправлено пользователю %d (попытка %d)", chatID, i+1)
+						break
+					}
 				}
 
 			case "course_info":
@@ -196,7 +210,7 @@ func main() {
 				msg := tgbotapi.NewMessage(chatID, `💳 Записаться на курс "AI-видео за 4 недели"
 
 📞 Для записи свяжитесь с менеджером:
-@username_manager
+@Murat_76video
 
 💰 Стоимость курса и условия оплаты уточняйте у менеджера.
 
