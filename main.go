@@ -57,6 +57,7 @@ func main() {
 	for update := range updates {
 		if update.Message != nil {
 			chatID := update.Message.Chat.ID
+			log.Printf("Получено сообщение от пользователя %d: %s", chatID, update.Message.Text)
 
 			// Проверяем команду /start или ключевое слово "хочу"
 			if (update.Message.IsCommand() && update.Message.Command() == "start") ||
@@ -70,10 +71,13 @@ func main() {
 				}
 				usersMutex.Unlock()
 
+				log.Printf("Отправляю приветственное сообщение пользователю %d", chatID)
 				msg := tgbotapi.NewMessage(chatID, "Привет! Рад видеть тебя здесь.\n🎯 Хочешь узнать, как делать Reels с помощью нейросетей — быстро, стильно?")
 				msg.ReplyMarkup = welcomeKeyboard()
 				if _, err := bot.Send(msg); err != nil {
-					log.Println("Ошибка отправки приветственного сообщения:", err)
+					log.Printf("Ошибка отправки приветственного сообщения пользователю %d: %v", chatID, err)
+				} else {
+					log.Printf("Приветственное сообщение успешно отправлено пользователю %d", chatID)
 				}
 			}
 		}
@@ -86,6 +90,7 @@ func main() {
 
 			chatID := update.CallbackQuery.Message.Chat.ID
 			data := update.CallbackQuery.Data
+			log.Printf("Получен callback: %s от пользователя %d", data, chatID)
 
 			switch data {
 			case "get_pdf":
@@ -96,18 +101,24 @@ func main() {
 				usersMutex.Unlock()
 
 				// Отправляем PDF
+				log.Printf("Отправляю PDF пользователю %d", chatID)
 				doc := tgbotapi.NewDocument(chatID, tgbotapi.FileID("BQACAgIAAxkBAAMUaDQYsojlC47_ygUxnhYkdZGrCEwAAoBqAAJOBKFJGvpBU-vHqYo2BA"))
 				doc.Caption = "📘 Вот твой PDF-гайд:\n5 нейросетей, которые делают Reels за тебя"
 				if _, err := bot.Send(doc); err != nil {
 					log.Printf("Ошибка отправки PDF: %v", err)
+					return // Если PDF не отправился, не продолжаем
 				}
+				log.Printf("PDF успешно отправлен пользователю %d", chatID)
 
-				// Отправляем видео
+				// Отправляем видео с кнопкой
+				log.Printf("Отправляю видео пользователю %d", chatID)
 				video := tgbotapi.NewVideo(chatID, tgbotapi.FileID("BAACAgIAAxkBAAIBrWjSY0Ey6QwZ3wI_GjPkhXowkRF8AALZhAACmzxRSqv6032r5Wm3NgQ"))
 				video.Caption = "🎬 Урок второй воронка - пример создания видео с ИИ\n\n❗️ А если хочешь освоить создание коммерческих видео с ИИ за 4 недели, нажми кнопку ниже!"
 				video.ReplyMarkup = courseInfoKeyboard()
 				if _, err := bot.Send(video); err != nil {
 					log.Printf("Ошибка отправки видео: %v", err)
+				} else {
+					log.Printf("Видео успешно отправлено пользователю %d", chatID)
 				}
 
 			case "course_info":
